@@ -4,6 +4,7 @@ const express = require("express");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
 const encrypt = require("mongoose-encryption");
+const md5 = require("md5");
 
 const app = express();
 app.set("view engine", "ejs");
@@ -18,8 +19,6 @@ const userSchema = new mongoose.Schema ({
     password: String
 });
 
-const secret = process.env.DB_SECRET;
-userSchema.plugin(encrypt, { secret: secret, encryptedFields:["password"]});
 
 const UserModel = mongoose.model("user", userSchema);
 
@@ -42,7 +41,7 @@ app.get("/register", (req, res)=>{
 app.post("/register", (req, res)=>{
     const newUser = new UserModel({
         email: req.body.username,
-        password: req.body.password
+        password: md5(req.body.password)
     });
     //Check username exist
     UserModel.findOne({email: req.body.username}, (err, foundUser)=>{
@@ -79,7 +78,7 @@ app.post("/login", (req, res)=>{
                 if (foundUser.password === password){
                     res.render("secrets");
                 }else{
-
+                    res.send("username or password is wrong!")
                 }
             }
         }
