@@ -6,6 +6,8 @@ const mongoose = require("mongoose");
 const session = require("express-session");
 const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const findOrCreate = require("mongoose-findorcreate");
 
 const app = express();
 app.set("view engine", "ejs");
@@ -22,28 +24,59 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+
 //DB
 mongoose.connect(process.env.DB_URL);
 
 const userSchema = new mongoose.Schema ({
-    email: String,
-    password: String
+    username: String,
+    password: String,
+    googleId: String
 });
 
 userSchema.plugin(passportLocalMongoose);
-
+userSchema.plugin(findOrCreate);
 const User = mongoose.model("user", userSchema);
 
 passport.use(User.createStrategy());
 
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+passport.serializeUser(function(user, done) {
+    done(null, user._id);
+});
+ 
+passport.deserializeUser(function(id, done) {
+  User.findById(id, function(err, user) {
+    done(err, user);
+  });
+});
 
+//Google oauth
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/secrets"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    User.findOrCreate({ googleId: profile.id, username: profile._json.email }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
 
 //Routes
 app.get("/", (req, res)=>{
     res.render("home");
 });
+
+app.get("/auth/google",
+  passport.authenticate("google", { scope: ["openid","profile","email"] }));
+
+app.get("/auth/google/secrets", 
+  passport.authenticate("google", { failureRedirect: "/login" }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect("/secrets");
+  });
 
 app.get("/login", (req, res)=>{
     res.render("login");
@@ -66,7 +99,7 @@ app.post("/register", (req, res)=>{
     
     User.register({username: req.body.username}, req.body.password, (err, user)=>{
         if (err) {
-            console.log("err");
+            console.log(err);
             res.redirect("/register");
         } else {
             passport.authenticate("local")(req, res, ()=>{
