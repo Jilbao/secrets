@@ -68,7 +68,7 @@ app.post("/register", (req, res)=>{
 //Login
 app.post("/login", (req, res)=>{
     const username = req.body.username;
-    const password = req.body.password;
+    const password = md5(req.body.password);
 
     UserModel.findOne({email: username}, (err, foundUser)=>{
         if (err) {
